@@ -1,0 +1,14 @@
+.idea/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.egg-info/
+build/
+dist/
+*.py[cod]
+*.pyo
+*.pyd
+.public-worktree/
+public-worktree/

@@ -1,0 +1,38 @@
+# Public branch allowlist.
+#
+# Paths are relative to the internal source repository root. List only files
+# and directories that are approved for public distribution. Prefer explicit
+# files over broad directories when a directory may later contain private data.
+
+.gitignore
+.gitattributes
+.public-include
+README.md
+LICENSE
+pyproject.toml
+
+# Public Python package source. Listed explicitly to avoid copying
+# src/tls_c1/vendor/ DLL/LIB assets from the internal tree.
+src/tls_c1/__init__.py
+src/tls_c1/_native.py
+src/tls_c1/api.py
+src/tls_c1/constants.py
+src/tls_c1/device.py
+src/tls_c1/errors.py
+src/tls_c1/py.typed
+src/tls_c1/types.py
+src/tls_c1/vendor/README.md
+src/tls_c1/vendor/win32/.gitkeep
+src/tls_c1/vendor/win_amd64/.gitkeep
+
+# Public header area. The vendor SDK header remains internal.
+include/
+
+# Public documentation. Do not include raw hardware logs or internal notes
+# unless they have been reviewed for serials, paths, and vendor licensing.
+docs/api_coverage.md
+docs/sdk_audit.md
+docs/public-release.md
+
+# Public examples.
+examples/

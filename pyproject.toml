@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tls-c1-spectrometer"
+version = "0.0.0"
+description = "Python wrapper for the Zolix spectrometer SDK"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Proprietary SDK wrapper; verify vendor DLL redistribution rights before publishing." }
+authors = [{ name = "TBD" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: Microsoft :: Windows",
+  "Topic :: Scientific/Engineering",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tls_c1 = ["py.typed", "vendor/win_amd64/*.dll", "vendor/win32/*.dll"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+  "hardware: opt-in tests that open real spectrometer hardware",
+  "hardware_readonly: opt-in read-only hardware behavior tests",
+  "hardware_reversible: opt-in reversible hardware control tests",
+  "hardware_manual: manual hardware tests for dangerous or persistent operations",
+  "serial: tests that must not run concurrently for the same hardware",
+]

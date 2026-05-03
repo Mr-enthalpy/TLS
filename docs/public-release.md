@@ -20,6 +20,49 @@ The `public` branch is a generated view. Do not edit it by hand.
 The public file set is allowlist-driven. Do not replace it with a broad
 denylist such as "copy everything except third_party".
 
+## Remote topology
+
+Use two different remotes with different purposes.
+
+Private remote, complete internal repository:
+
+```text
+private  git@github.com:Mr-enthalpy/tls_c1.git
+```
+
+This remote receives full internal branches and history:
+
+```bash
+git push private main internal
+```
+
+Public release remote, generated public repository:
+
+```text
+public-release  git@github.com:Mr-enthalpy/TLS.git
+```
+
+This remote receives only the generated local `public` branch:
+
+```bash
+git push public-release public:main
+```
+
+`public:main` means: push the local `public` branch to the `main` branch in
+the public-release remote. Do not push local `main` or `internal` to the public
+remote.
+
+If this clone still uses `origin` for the private repository, either keep using
+`origin` for private work or rename it deliberately:
+
+```bash
+git remote rename origin private
+git remote add public-release git@github.com:Mr-enthalpy/TLS.git
+```
+
+Do not add the public repository as the default push target for internal
+branches.
+
 ## Generate public locally
 
 Run from a clean internal worktree:
@@ -46,14 +89,43 @@ worktree has manual changes, or if a manifest entry is missing.
 
 ## Publish
 
-Push the generated branch explicitly to the public remote:
+Push the generated branch explicitly to the public-release remote:
 
 ```bash
-git push public-remote public:main
+git push public-release public:main
 ```
 
-Use the public remote name configured for the public repository. Do not push
-internal branches to the public remote.
+Keep full internal history on the private remote:
+
+```bash
+git push private main internal
+```
+
+If the local `internal` branch does not exist, create or map it intentionally
+before using that command. The important invariant is that the public-release
+remote only receives local `public`.
+
+## Forbidden commands
+
+Never push internal branches to the public-release remote:
+
+```bash
+git push public-release main
+git push public-release internal
+git push public-release --all
+```
+
+Never merge or rebase internal history into `public`:
+
+```bash
+git merge main
+git merge internal
+git rebase main
+git rebase internal
+```
+
+These commands contaminate the public branch history or publish the wrong
+branch. A clean final tree is not enough; Git history must also remain clean.
 
 ## Never merge internal into public
 
@@ -63,6 +135,8 @@ Do not run:
 git checkout public
 git merge main
 git merge internal/main
+git rebase main
+git rebase internal/main
 ```
 
 Merging connects the public branch history to internal history. That can expose

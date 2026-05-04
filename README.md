@@ -14,7 +14,8 @@ This is not a public pip release yet.
 - Native binding: `126/126` `spec_*` functions registered from the vendor ABI.
 - Low-level API: `126/126` functions exposed on `SpectrometerAPI`.
 - High-level API: stable core workflow and diagnostics only.
-- Hardware behavior recorded in this branch: `44/126` SDK functions.
+- Hardware behavior recorded in this branch: `47/126` SDK functions.
+- SDK API safety classification is tracked in `docs/api_safety.md` and mirrored in `docs/api_coverage.md`.
 - Public branch model: `public` is generated from internal `main` by `.public-include` and `scripts/sync-public.sh`; do not edit `public` manually.
 
 ## Windows And FTDI Setup
@@ -48,6 +49,8 @@ src/tls_c1/vendor/win32/
 ```
 
 The generated public branch is allowlist-based and keeps only `src/tls_c1/vendor/README.md` plus `.gitkeep` files. Vendor DLLs, LIB files, archives, and the unpacked SDK must not be published unless redistribution rights are explicitly approved.
+
+Internal builds may bundle vendor DLLs inside the private wheel. Public/code-only builds must not bundle those DLLs and instead rely on `TLS_C1_SDK_DIR` or a local SDK installation.
 
 ## Minimal Use
 
@@ -134,6 +137,7 @@ Common settings:
 
 ```powershell
 $env:TLS_C1_RUN_HARDWARE_TESTS = "1"
+$env:TLS_C1_RUN_MOTION_TESTS = "1"
 $env:TLS_C1_SERIAL = "OM319069"
 $env:TLS_C1_SAFE_GRATING = "1"
 $env:TLS_C1_SAFE_WAVELENGTH_NM = "546"
@@ -158,18 +162,36 @@ $env:TLS_C1_RUN_REVERSIBLE_TESTS = "1"
 py -3.12 -m pytest tests\test_hardware_reversible.py -s
 ```
 
-Manual/dangerous tests require a separate opt-in:
+Motion tests require their own opt-in because they move mechanical axes:
+
+```powershell
+$env:TLS_C1_RUN_MOTION_TESTS = "1"
+py -3.12 -m pytest -m hardware_motion -s
+```
+
+Manual/dangerous tests require separate opt-ins:
 
 ```powershell
 $env:TLS_C1_RUN_MANUAL_TESTS = "1"
 py -3.12 -m pytest -m hardware_manual -s
 ```
 
+Destructive tests require a double opt-in:
+
+```powershell
+$env:TLS_C1_RUN_MANUAL_TESTS = "1"
+$env:TLS_C1_RUN_DESTRUCTIVE_TESTS = "1"
+py -3.12 -m pytest -m hardware_destructive -s
+```
+
 Do not add automatic tests for `restore`, `backup`, EEPROM/user data, calibration writes, correction-param writes, home/zero routines, range scans, trigger writes, or persistent setup flags.
+
+The 2026-05-04 extended read-only session added behavior for `spec_get_zero_offset`, `spec_get_zero_pos`, and `spec_get_adjustment`, then the device remained enumerable but could not be reopened until the USB/FTDI session is reset. The broader extended read-only suite is present but not counted as verified until it passes end-to-end on a reset device.
 
 ## Documentation
 
 - `docs/api_coverage.md`: generated coverage matrix and high-level API summary.
+- `docs/api_safety.md`: generated SDK safety classification and automated-test policy.
 - `docs/sdk_audit.md`: SDK audit findings.
 - `docs/public-release.md`: generated public branch workflow.
 

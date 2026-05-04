@@ -1,5 +1,6 @@
 .idea/
 .venv/
+.venv-wheel-check/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/

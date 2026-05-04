@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 from pathlib import Path
 
 from ._native import FUNCTION_SPECS, STRING_BUFFER_SIZE, load_library
+from . import constants as sdk_constants
 from .errors import TLSC1DeviceError, TLSC1ValidationError
 from .types import DeviceInfo, SpecInfo
 
@@ -33,7 +35,15 @@ _EXPLICIT_METHODS = {
     "spec_get_is_open",
     "spec_get_error",
     "spec_set_dev_info",
+    "spec_set_io_output",
     "spec_get_dev_info",
+    "spec_set_grating",
+    "spec_set_turret",
+    "spec_set_turret_enbale",
+    "spec_move_wave",
+    "spec_move_to_wave",
+    "spec_move_steps",
+    "spec_move_to_steps",
     "spec_get_grating_info",
     "spec_get_max_wavelength",
     "spec_get_init_wave",
@@ -43,6 +53,53 @@ _EXPLICIT_METHODS = {
     "spec_get_filter_status",
     "spec_set_filter_status",
     "spec_get_filter",
+    "spec_set_filter",
+    "spec_get_zero_offset",
+    "spec_get_zero_pos",
+    "spec_get_adjustment",
+    "spec_set_move_speed",
+    "spec_get_motor_steps",
+    "spec_set_motor_steps",
+    "spec_get_motor_speed",
+    "spec_set_motor_speed",
+    "spec_get_motor_home_dir",
+    "spec_set_motor_home_dir",
+    "spec_get_motor_total_steps",
+    "spec_set_motor_total_steps",
+    "spec_set_motor_home",
+    "spec_get_init_peripherals",
+    "spec_set_init_peripherals",
+    "spec_get_peripherals_init_pos",
+    "spec_set_peripherals_init_pos",
+    "spec_get_trig_out_interval",
+    "spec_get_trig_in_interval",
+    "spec_set_trig_out_interval",
+    "spec_set_trig_in_interval",
+    "spec_set_trig_mode",
+    "spec_is_setup_mirror",
+    "spec_setup_mirror",
+    "spec_is_setup_slit",
+    "spec_setup_slit",
+    "spec_is_setup_shutter",
+    "spec_setup_shutter",
+    "spec_get_slit_width",
+    "spec_set_slit_width",
+    "spec_get_slit_bandpass",
+    "spec_set_slit_bandpass",
+    "spec_get_slit_zero_pos",
+    "spec_set_slit_zero_pos",
+    "spec_get_slit_model",
+    "spec_set_slit_model",
+    "spec_get_shutter_status",
+    "spec_set_shutter_status",
+    "spec_get_diaphragm",
+    "spec_set_diaphragm",
+    "spec_get_diaphragm_steps",
+    "spec_set_diaphragm_steps",
+    "spec_get_focus_mirror",
+    "spec_set_focus_mirror",
+    "spec_get_focus_mirror_steps",
+    "spec_set_focus_mirror_steps",
     "spec_set_correct_params",
     "spec_get_correct_params",
     "spec_wave_to_step",
@@ -63,6 +120,34 @@ _SIMPLE_OUT_TYPES = {
     ctypes.c_short,
     ctypes.c_ubyte,
     ctypes.c_ushort,
+}
+_MOTOR_CODES = {
+    sdk_constants.MOTOR_FILTER_OUTSIDE,
+    sdk_constants.MOTOR_EXPORT,
+    sdk_constants.MOTOR_SLIT_SIDE_IN,
+    sdk_constants.MOTOR_SLIT_SIDE_OUT,
+    sdk_constants.MOTOR_SLIT_FRONT_OUT,
+    sdk_constants.MOTOR_SLIT_FRONT_IN,
+    sdk_constants.MOTOR_ENTRANCE,
+    sdk_constants.MOTOR_FILTER_INSIDE,
+    sdk_constants.MOTOR_FOCUS_MIRROR,
+    sdk_constants.MOTOR_DIAPHRAGM_SIDE,
+    sdk_constants.MOTOR_DIAPHRAGM_FRONT,
+}
+_PERIPHERAL_FLAGS = {
+    sdk_constants.PERIPHERAL_FILTER_OUTSIDE,
+    sdk_constants.PERIPHERAL_EXPORT,
+    sdk_constants.PERIPHERAL_SLIT_SIDE_IN,
+    sdk_constants.PERIPHERAL_SLIT_SIDE_OUT,
+    sdk_constants.PERIPHERAL_SLIT_FRONT_OUT,
+    sdk_constants.PERIPHERAL_SLIT_FRONT_IN,
+    sdk_constants.PERIPHERAL_ENTRANCE,
+    sdk_constants.PERIPHERAL_FILTER_INSIDE,
+    sdk_constants.PERIPHERAL_SHUTTER1,
+    sdk_constants.PERIPHERAL_SHUTTER2,
+    sdk_constants.PERIPHERAL_FOCUS_MIRROR,
+    sdk_constants.PERIPHERAL_DIAPHRAGM_SIDE,
+    sdk_constants.PERIPHERAL_DIAPHRAGM_FRONT,
 }
 
 
@@ -178,6 +263,40 @@ class SpectrometerAPI:
         return converted
 
     @staticmethod
+    def _finite_float(value: object, name: str) -> float:
+        try:
+            converted = float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise TLSC1ValidationError(f"{name} must be a finite number") from exc
+        if not math.isfinite(converted):
+            raise TLSC1ValidationError(f"{name} must be a finite number")
+        return converted
+
+    @staticmethod
+    def _non_negative_int(value: object, name: str) -> int:
+        if isinstance(value, bool):
+            raise TLSC1ValidationError(f"{name} must be a non-negative integer, not bool")
+        try:
+            converted = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise TLSC1ValidationError(f"{name} must be a non-negative integer") from exc
+        if converted < 0:
+            raise TLSC1ValidationError(f"{name} must be a non-negative integer")
+        return converted
+
+    @staticmethod
+    def _bounded_int(value: object, name: str, minimum: int, maximum: int) -> int:
+        if isinstance(value, bool):
+            raise TLSC1ValidationError(f"{name} must be an integer in [{minimum}, {maximum}], not bool")
+        try:
+            converted = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise TLSC1ValidationError(f"{name} must be an integer in [{minimum}, {maximum}]") from exc
+        if converted < minimum or converted > maximum:
+            raise TLSC1ValidationError(f"{name} must be an integer in [{minimum}, {maximum}]")
+        return converted
+
+    @staticmethod
     def _filter_channel(value: object) -> int:
         if isinstance(value, bool):
             raise TLSC1ValidationError("filter channel must be 0 or 1, not bool")
@@ -187,6 +306,64 @@ class SpectrometerAPI:
             raise TLSC1ValidationError("filter channel must be 0 or 1") from exc
         if converted not in (0, 1):
             raise TLSC1ValidationError("filter channel must be 0 or 1")
+        return converted
+
+    @classmethod
+    def _slit_index(cls, value: object) -> int:
+        return cls._bounded_int(value, "slit index", 0, 3)
+
+    @classmethod
+    def _slit_char(cls, value: int | str | bytes) -> bytes | int:
+        if isinstance(value, (str, bytes)):
+            char = cls._encode_c_char(value)
+            raw = bytes([char]) if isinstance(char, int) else char
+            if raw not in (b"0", b"1", b"2", b"3"):
+                raise TLSC1ValidationError("slit index char must be one of '0', '1', '2', or '3'")
+            return char
+        return cls._encode_c_char(str(cls._slit_index(value)))
+
+    @classmethod
+    def _shutter_index(cls, value: object) -> int:
+        return cls._bounded_int(value, "shutter index", 0, 1)
+
+    @classmethod
+    def _mirror_index(cls, value: object) -> int:
+        return cls._bounded_int(value, "mirror index", 0, 1)
+
+    @classmethod
+    def _binary_index(cls, value: object, name: str) -> int:
+        return cls._bounded_int(value, name, 0, 1)
+
+    @classmethod
+    def _byte_value(cls, value: object, name: str) -> int:
+        return cls._bounded_int(value, name, 0, 255)
+
+    @classmethod
+    def _short_non_negative(cls, value: object, name: str) -> int:
+        return cls._bounded_int(value, name, 0, 32767)
+
+    @staticmethod
+    def _known_motor_code(value: object) -> int:
+        if isinstance(value, bool):
+            raise TLSC1ValidationError("motor code must be one of the SDK MOTOR_* constants, not bool")
+        try:
+            converted = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise TLSC1ValidationError("motor code must be one of the SDK MOTOR_* constants") from exc
+        if converted not in _MOTOR_CODES:
+            raise TLSC1ValidationError("motor code must be one of the supported SDK MOTOR_* constants")
+        return converted
+
+    @staticmethod
+    def _known_peripheral_flag(value: object) -> int:
+        if isinstance(value, bool):
+            raise TLSC1ValidationError("peripheral flag must be one of the SDK PERIPHERAL_* constants, not bool")
+        try:
+            converted = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise TLSC1ValidationError("peripheral flag must be one of the SDK PERIPHERAL_* constants") from exc
+        if converted not in _PERIPHERAL_FLAGS:
+            raise TLSC1ValidationError("peripheral flag must be one of the supported SDK PERIPHERAL_* constants")
         return converted
 
     def _get_error(self, device_id: int) -> str:
@@ -266,6 +443,46 @@ class SpectrometerAPI:
         self._check(ok, "get_dev_info", device_id)
         return DeviceInfo.from_spec_info(info)
 
+    def set_io_output(self, device_id: int, value: int) -> None:
+        value = self._bounded_int(value, "io output", -32768, 32767)
+        ok = self.lib.spec_set_io_output(int(device_id), value)
+        self._check(ok, "set_io_output", device_id)
+
+    def set_grating(self, device_id: int, grating: int) -> None:
+        grating = self._positive_int(grating, "grating")
+        ok = self.lib.spec_set_grating(int(device_id), grating)
+        self._check(ok, "set_grating", device_id)
+
+    def set_turret(self, device_id: int, turret: int) -> None:
+        turret = self._positive_int(turret, "turret")
+        ok = self.lib.spec_set_turret(int(device_id), turret)
+        self._check(ok, "set_turret", device_id)
+
+    def set_turret_enbale(self, device_id: int, enabled_turret: int) -> None:
+        enabled_turret = self._bounded_int(enabled_turret, "enabled turret mask/count", 0, 0x7FFF)
+        ok = self.lib.spec_set_turret_enbale(int(device_id), enabled_turret)
+        self._check(ok, "set_turret_enbale", device_id)
+
+    def move_wave(self, device_id: int, delta_wave: float) -> None:
+        delta_wave = self._finite_float(delta_wave, "delta_wave")
+        ok = self.lib.spec_move_wave(int(device_id), delta_wave)
+        self._check(ok, "move_wave", device_id)
+
+    def move_to_wave(self, device_id: int, wave: float) -> None:
+        wave = self._finite_float(wave, "wave")
+        ok = self.lib.spec_move_to_wave(int(device_id), wave)
+        self._check(ok, "move_to_wave", device_id)
+
+    def move_steps(self, device_id: int, delta_steps: float) -> None:
+        delta_steps = self._finite_float(delta_steps, "delta_steps")
+        ok = self.lib.spec_move_steps(int(device_id), delta_steps)
+        self._check(ok, "move_steps", device_id)
+
+    def move_to_steps(self, device_id: int, steps: float) -> None:
+        steps = self._finite_float(steps, "steps")
+        ok = self.lib.spec_move_to_steps(int(device_id), steps)
+        self._check(ok, "move_to_steps", device_id)
+
     def get_grating_info(self, device_id: int, grating: int) -> tuple[int, int]:
         grating = self._positive_int(grating, "grating")
         groove = ctypes.c_int()
@@ -329,22 +546,322 @@ class SpectrometerAPI:
         self._check(ok, "get_filter", device_id)
         return int(index.value)
 
+    def set_filter(self, device_id: int, which: int, index: int) -> None:
+        which = self._filter_channel(which)
+        index = self._positive_int(index, "filter index")
+        ok = self.lib.spec_set_filter(int(device_id), which, index)
+        self._check(ok, "set_filter", device_id)
+
+    def get_zero_offset(self, device_id: int, grating: int) -> int:
+        grating = self._positive_int(grating, "grating")
+        offset = ctypes.c_long()
+        ok = self.lib.spec_get_zero_offset(int(device_id), grating, ctypes.byref(offset))
+        self._check(ok, "get_zero_offset", device_id)
+        return int(offset.value)
+
+    def get_zero_pos(self, device_id: int, grating: int, index: int) -> int:
+        grating = self._positive_int(grating, "grating")
+        index = self._bounded_int(index, "zero position index", 0, 3)
+        position = ctypes.c_long()
+        ok = self.lib.spec_get_zero_pos(int(device_id), grating, index, ctypes.byref(position))
+        self._check(ok, "get_zero_pos", device_id)
+        return int(position.value)
+
+    def get_adjustment(self, device_id: int, grating: int) -> float:
+        grating = self._positive_int(grating, "grating")
+        value = ctypes.c_float()
+        ok = self.lib.spec_get_adjustment(int(device_id), grating, ctypes.byref(value))
+        self._check(ok, "get_adjustment", device_id)
+        return float(value.value)
+
+    def set_move_speed(self, device_id: int, grating: int, speed: int) -> None:
+        grating = self._positive_int(grating, "grating")
+        speed = self._positive_int(speed, "speed")
+        ok = self.lib.spec_set_move_speed(int(device_id), grating, speed)
+        self._check(ok, "set_move_speed", device_id)
+
+    def get_motor_steps(self, device_id: int, motor: int) -> int:
+        motor = self._known_motor_code(motor)
+        value = ctypes.c_long()
+        ok = self.lib.spec_get_motor_steps(int(device_id), motor, ctypes.byref(value))
+        self._check(ok, "get_motor_steps", device_id)
+        return int(value.value)
+
+    def set_motor_steps(self, device_id: int, motor: int, steps: int) -> None:
+        motor = self._known_motor_code(motor)
+        steps = self._non_negative_int(steps, "steps")
+        ok = self.lib.spec_set_motor_steps(int(device_id), motor, steps)
+        self._check(ok, "set_motor_steps", device_id)
+
+    def get_motor_speed(self, device_id: int, motor: int) -> int:
+        motor = self._known_motor_code(motor)
+        value = ctypes.c_int()
+        ok = self.lib.spec_get_motor_speed(int(device_id), motor, ctypes.byref(value))
+        self._check(ok, "get_motor_speed", device_id)
+        return int(value.value)
+
+    def set_motor_speed(self, device_id: int, motor: int, speed: int) -> None:
+        motor = self._known_motor_code(motor)
+        speed = self._positive_int(speed, "speed")
+        ok = self.lib.spec_set_motor_speed(int(device_id), motor, speed)
+        self._check(ok, "set_motor_speed", device_id)
+
+    def get_motor_home_dir(self, device_id: int, motor: int) -> int:
+        motor = self._known_motor_code(motor)
+        value = ctypes.c_int()
+        ok = self.lib.spec_get_motor_home_dir(int(device_id), motor, ctypes.byref(value))
+        self._check(ok, "get_motor_home_dir", device_id)
+        return int(value.value)
+
+    def set_motor_home_dir(self, device_id: int, motor: int, direction: int) -> None:
+        motor = self._known_motor_code(motor)
+        direction = self._bounded_int(direction, "home direction", -1, 1)
+        ok = self.lib.spec_set_motor_home_dir(int(device_id), motor, direction)
+        self._check(ok, "set_motor_home_dir", device_id)
+
+    def get_motor_total_steps(self, device_id: int, motor: int) -> int:
+        motor = self._known_motor_code(motor)
+        value = ctypes.c_long()
+        ok = self.lib.spec_get_motor_total_steps(int(device_id), motor, ctypes.byref(value))
+        self._check(ok, "get_motor_total_steps", device_id)
+        return int(value.value)
+
+    def set_motor_total_steps(self, device_id: int, motor: int, steps: int) -> None:
+        motor = self._known_motor_code(motor)
+        steps = self._non_negative_int(steps, "steps")
+        ok = self.lib.spec_set_motor_total_steps(int(device_id), motor, steps)
+        self._check(ok, "set_motor_total_steps", device_id)
+
+    def set_motor_home(self, device_id: int, motor: int) -> None:
+        motor = self._known_motor_code(motor)
+        ok = self.lib.spec_set_motor_home(int(device_id), motor)
+        self._check(ok, "set_motor_home", device_id)
+
+    def get_init_peripherals(self, device_id: int) -> int:
+        value = ctypes.c_ushort()
+        ok = self.lib.spec_get_init_peripherals(int(device_id), ctypes.byref(value))
+        self._check(ok, "get_init_peripherals", device_id)
+        return int(value.value)
+
+    def set_init_peripherals(self, device_id: int, peripheral_flags: int) -> None:
+        flags = self._bounded_int(peripheral_flags, "peripheral flags", 0, 0xFFFF)
+        ok = self.lib.spec_set_init_peripherals(int(device_id), flags)
+        self._check(ok, "set_init_peripherals", device_id)
+
+    def get_peripherals_init_pos(self, device_id: int, peripheral: int) -> int:
+        peripheral = self._known_peripheral_flag(peripheral)
+        value = ctypes.c_ubyte()
+        ok = self.lib.spec_get_peripherals_init_pos(int(device_id), peripheral, ctypes.byref(value))
+        self._check(ok, "get_peripherals_init_pos", device_id)
+        return int(value.value)
+
+    def set_peripherals_init_pos(self, device_id: int, peripheral: int, position: int) -> None:
+        peripheral = self._known_peripheral_flag(peripheral)
+        position = self._byte_value(position, "position")
+        ok = self.lib.spec_set_peripherals_init_pos(int(device_id), peripheral, position)
+        self._check(ok, "set_peripherals_init_pos", device_id)
+
+    def get_trig_out_interval(self, device_id: int) -> int:
+        value = ctypes.c_ushort()
+        ok = self.lib.spec_get_trig_out_interval(int(device_id), ctypes.byref(value))
+        self._check(ok, "get_trig_out_interval", device_id)
+        return int(value.value)
+
+    def set_trig_out_interval(self, device_id: int, interval: int) -> None:
+        interval = self._bounded_int(interval, "trigger output interval", 0, 0xFFFF)
+        ok = self.lib.spec_set_trig_out_interval(int(device_id), interval)
+        self._check(ok, "set_trig_out_interval", device_id)
+
+    def get_trig_in_interval(self, device_id: int) -> float:
+        value = ctypes.c_float()
+        ok = self.lib.spec_get_trig_in_interval(int(device_id), ctypes.byref(value))
+        self._check(ok, "get_trig_in_interval", device_id)
+        return float(value.value)
+
+    def set_trig_in_interval(self, device_id: int, interval: float) -> None:
+        if float(interval) < 0:
+            raise TLSC1ValidationError("trigger input interval must be non-negative")
+        ok = self.lib.spec_set_trig_in_interval(int(device_id), float(interval))
+        self._check(ok, "set_trig_in_interval", device_id)
+
+    def set_trig_mode(self, device_id: int, enabled: bool) -> None:
+        ok = self.lib.spec_set_trig_mode(int(device_id), bool(enabled))
+        self._check(ok, "set_trig_mode", device_id)
+
+    def is_setup_mirror(self, device_id: int, index: int) -> bool:
+        index = self._mirror_index(index)
+        setup = ctypes.c_bool()
+        ok = self.lib.spec_is_setup_mirror(int(device_id), index, ctypes.byref(setup))
+        self._check(ok, "is_setup_mirror", device_id)
+        return bool(setup.value)
+
+    def setup_mirror(self, device_id: int, index: int, enabled: bool) -> None:
+        index = self._mirror_index(index)
+        ok = self.lib.spec_setup_mirror(int(device_id), index, bool(enabled))
+        self._check(ok, "setup_mirror", device_id)
+
+    def is_setup_slit(self, device_id: int, index: int) -> bool:
+        index = self._slit_index(index)
+        setup = ctypes.c_bool()
+        ok = self.lib.spec_is_setup_slit(int(device_id), index, ctypes.byref(setup))
+        self._check(ok, "is_setup_slit", device_id)
+        return bool(setup.value)
+
+    def setup_slit(self, device_id: int, index: int, enabled: bool) -> None:
+        index = self._slit_index(index)
+        ok = self.lib.spec_setup_slit(int(device_id), index, bool(enabled))
+        self._check(ok, "setup_slit", device_id)
+
+    def is_setup_shutter(self, device_id: int, index: int) -> bool:
+        index = self._shutter_index(index)
+        setup = ctypes.c_bool()
+        ok = self.lib.spec_is_setup_shutter(int(device_id), index, ctypes.byref(setup))
+        self._check(ok, "is_setup_shutter", device_id)
+        return bool(setup.value)
+
+    def setup_shutter(self, device_id: int, index: int, enabled: bool) -> None:
+        index = self._shutter_index(index)
+        ok = self.lib.spec_setup_shutter(int(device_id), index, bool(enabled))
+        self._check(ok, "setup_shutter", device_id)
+
+    def get_slit_width(self, device_id: int, index: int) -> int:
+        index = self._slit_index(index)
+        value = ctypes.c_int()
+        ok = self.lib.spec_get_slit_width(int(device_id), index, ctypes.byref(value))
+        self._check(ok, "get_slit_width", device_id)
+        return int(value.value)
+
+    def set_slit_width(self, device_id: int, index: int, width: int) -> None:
+        index = self._slit_index(index)
+        width = self._non_negative_int(width, "slit width")
+        ok = self.lib.spec_set_slit_width(int(device_id), index, width)
+        self._check(ok, "set_slit_width", device_id)
+
+    def get_slit_bandpass(self, device_id: int, index: int) -> float:
+        index = self._slit_index(index)
+        value = ctypes.c_float()
+        ok = self.lib.spec_get_slit_bandpass(int(device_id), index, ctypes.byref(value))
+        self._check(ok, "get_slit_bandpass", device_id)
+        return float(value.value)
+
+    def set_slit_bandpass(self, device_id: int, index: int, bandpass: float) -> None:
+        index = self._slit_index(index)
+        if float(bandpass) < 0:
+            raise TLSC1ValidationError("slit bandpass must be non-negative")
+        ok = self.lib.spec_set_slit_bandpass(int(device_id), index, float(bandpass))
+        self._check(ok, "set_slit_bandpass", device_id)
+
+    def get_slit_zero_pos(self, device_id: int, index: int) -> int:
+        index = self._slit_index(index)
+        value = ctypes.c_int()
+        ok = self.lib.spec_get_slit_zero_pos(int(device_id), index, ctypes.byref(value))
+        self._check(ok, "get_slit_zero_pos", device_id)
+        return int(value.value)
+
+    def set_slit_zero_pos(self, device_id: int, index: int, position: int) -> None:
+        index = self._slit_index(index)
+        position = self._non_negative_int(position, "slit zero position")
+        ok = self.lib.spec_set_slit_zero_pos(int(device_id), index, position)
+        self._check(ok, "set_slit_zero_pos", device_id)
+
+    def get_slit_model(self, device_id: int, index: int | str | bytes) -> str:
+        char = self._slit_char(index)
+        buffer = self._buffer()
+        ok = self.lib.spec_get_slit_model(int(device_id), char, buffer)
+        self._check(ok, "get_slit_model", device_id)
+        return self._decode_c_string(buffer.raw)
+
+    def set_slit_model(self, device_id: int, index: int | str | bytes, model: str | bytes) -> None:
+        char = self._slit_char(index)
+        ok = self.lib.spec_set_slit_model(int(device_id), char, self._encode_c_string(model))
+        self._check(ok, "set_slit_model", device_id)
+
+    def get_shutter_status(self, device_id: int, index: int) -> bool:
+        index = self._shutter_index(index)
+        value = ctypes.c_bool()
+        ok = self.lib.spec_get_shutter_status(int(device_id), index, ctypes.byref(value))
+        self._check(ok, "get_shutter_status", device_id)
+        return bool(value.value)
+
+    def set_shutter_status(self, device_id: int, index: int, open_: bool) -> None:
+        index = self._shutter_index(index)
+        ok = self.lib.spec_set_shutter_status(int(device_id), index, bool(open_))
+        self._check(ok, "set_shutter_status", device_id)
+
+    def get_diaphragm(self, device_id: int, index: int) -> int:
+        index = self._binary_index(index, "diaphragm index")
+        value = ctypes.c_int()
+        ok = self.lib.spec_get_diaphragm(int(device_id), index, ctypes.byref(value))
+        self._check(ok, "get_diaphragm", device_id)
+        return int(value.value)
+
+    def set_diaphragm(self, device_id: int, index: int, position: int) -> None:
+        index = self._binary_index(index, "diaphragm index")
+        position = self._non_negative_int(position, "diaphragm position")
+        ok = self.lib.spec_set_diaphragm(int(device_id), index, position)
+        self._check(ok, "set_diaphragm", device_id)
+
+    def get_diaphragm_steps(self, device_id: int, index: int, position: int) -> int:
+        index = self._binary_index(index, "diaphragm index")
+        position = self._binary_index(position, "diaphragm position index")
+        value = ctypes.c_long()
+        ok = self.lib.spec_get_diaphragm_steps(int(device_id), index, position, ctypes.byref(value))
+        self._check(ok, "get_diaphragm_steps", device_id)
+        return int(value.value)
+
+    def set_diaphragm_steps(self, device_id: int, index: int, position: int, steps: int) -> None:
+        index = self._binary_index(index, "diaphragm index")
+        position = self._binary_index(position, "diaphragm position index")
+        steps = self._non_negative_int(steps, "steps")
+        ok = self.lib.spec_set_diaphragm_steps(int(device_id), index, position, steps)
+        self._check(ok, "set_diaphragm_steps", device_id)
+
+    def get_focus_mirror(self, device_id: int) -> int:
+        value = ctypes.c_int()
+        ok = self.lib.spec_get_focus_mirror(int(device_id), ctypes.byref(value))
+        self._check(ok, "get_focus_mirror", device_id)
+        return int(value.value)
+
+    def set_focus_mirror(self, device_id: int, position: int) -> None:
+        position = self._non_negative_int(position, "focus mirror position")
+        ok = self.lib.spec_set_focus_mirror(int(device_id), position)
+        self._check(ok, "set_focus_mirror", device_id)
+
+    def get_focus_mirror_steps(self, device_id: int, position: int) -> int:
+        position = self._binary_index(position, "focus mirror position index")
+        value = ctypes.c_long()
+        ok = self.lib.spec_get_focus_mirror_steps(int(device_id), position, ctypes.byref(value))
+        self._check(ok, "get_focus_mirror_steps", device_id)
+        return int(value.value)
+
+    def set_focus_mirror_steps(self, device_id: int, position: int, steps: int) -> None:
+        position = self._binary_index(position, "focus mirror position index")
+        steps = self._non_negative_int(steps, "steps")
+        ok = self.lib.spec_set_focus_mirror_steps(int(device_id), position, steps)
+        self._check(ok, "set_focus_mirror_steps", device_id)
+
     def set_correct_params(self, device_id: int, turret: int, grating: int, code: int, param: object) -> None:
+        turret = self._positive_int(turret, "turret")
+        grating = self._positive_int(grating, "grating")
+        code = self._bounded_int(code, "correction code", 0, 255)
         ok = self.lib.spec_set_correct_params(
             int(device_id),
-            int(turret),
-            int(grating),
-            int(code),
+            turret,
+            grating,
+            code,
             self._as_void_pointer(param),
         )
         self._check(ok, "set_correct_params", device_id)
 
     def get_correct_params(self, device_id: int, turret: int, grating: int, code: int, param: object) -> object:
+        turret = self._positive_int(turret, "turret")
+        grating = self._positive_int(grating, "grating")
+        code = self._bounded_int(code, "correction code", 0, 255)
         ok = self.lib.spec_get_correct_params(
             int(device_id),
-            int(turret),
-            int(grating),
-            int(code),
+            turret,
+            grating,
+            code,
             self._as_void_pointer(param),
         )
         self._check(ok, "get_correct_params", device_id)
@@ -363,15 +880,19 @@ class SpectrometerAPI:
         count: int,
         bin_x: int,
     ) -> list[float]:
-        result = (ctypes.c_float * int(count))()
+        turret = self._positive_int(turret, "turret")
+        grating = self._positive_int(grating, "grating")
+        count = self._positive_int(count, "count")
+        bin_x = self._positive_int(bin_x, "bin_x")
+        result = (ctypes.c_float * count)()
         ok = self.lib.spec_pixels_to_waves(
             int(device_id),
-            int(turret),
-            int(grating),
+            turret,
+            grating,
             float(center_wave),
             float(width),
-            int(count),
-            int(bin_x),
+            count,
+            bin_x,
             result,
         )
         self._check(ok, "pixels_to_waves", device_id)
@@ -393,18 +914,23 @@ class SpectrometerAPI:
         overlap: float,
         max_waves: int | None = None,
     ) -> list[float]:
-        capacity = max(int(max_waves or pixel_count), 1)
+        pixel_count = self._positive_int(pixel_count, "pixel_count")
+        bin_x = self._positive_int(bin_x, "bin_x")
+        edge = self._non_negative_int(edge, "edge")
+        if float(to_nm) < float(from_nm):
+            raise TLSC1ValidationError("to_nm must be greater than or equal to from_nm")
+        capacity = max(self._positive_int(max_waves, "max_waves") if max_waves is not None else pixel_count, 1)
         center_waves = (ctypes.c_float * capacity)()
         waves_count = ctypes.c_int(capacity)
         ok = self.lib.spec_init_spectral_splice(
             int(device_id),
             float(pixel_width),
-            int(pixel_count),
-            int(bin_x),
+            pixel_count,
+            bin_x,
             float(from_nm),
             float(to_nm),
             float(ref_nm),
-            int(edge),
+            edge,
             float(overlap),
             center_waves,
             ctypes.byref(waves_count),
@@ -426,19 +952,25 @@ class SpectrometerAPI:
         overlap: float,
         max_waves: int | None = None,
     ) -> list[float]:
-        capacity = max(int(max_waves or pixel_count), 1)
+        pixel_count = self._positive_int(pixel_count, "pixel_count")
+        bin_x = self._positive_int(bin_x, "bin_x")
+        edge_left = self._non_negative_int(edge_left, "edge_left")
+        edge_right = self._non_negative_int(edge_right, "edge_right")
+        if float(to_nm) < float(from_nm):
+            raise TLSC1ValidationError("to_nm must be greater than or equal to from_nm")
+        capacity = max(self._positive_int(max_waves, "max_waves") if max_waves is not None else pixel_count, 1)
         center_waves = (ctypes.c_float * capacity)()
         waves_count = ctypes.c_int(capacity)
         ok = self.lib.spec_init_spectral_splice2(
             int(device_id),
             float(pixel_width),
-            int(pixel_count),
-            int(bin_x),
+            pixel_count,
+            bin_x,
             float(from_nm),
             float(to_nm),
             float(ref_nm),
-            int(edge_left),
-            int(edge_right),
+            edge_left,
+            edge_right,
             float(overlap),
             center_waves,
             ctypes.byref(waves_count),
@@ -459,10 +991,15 @@ class SpectrometerAPI:
             raise TLSC1ValidationError("x1 and y1 must have the same length")
         if len(x2) != len(y2):
             raise TLSC1ValidationError("x2 and y2 must have the same length")
+        if len(x1) == 0 or len(x2) == 0:
+            raise TLSC1ValidationError("spectral splice inputs must not be empty")
 
         size1 = len(x1)
         size2 = len(x2)
-        capacity = max(int(output_capacity or (size1 + size2)), 1)
+        capacity = max(
+            self._positive_int(output_capacity, "output_capacity") if output_capacity is not None else size1 + size2,
+            1,
+        )
         x3 = (ctypes.c_float * capacity)()
         y3 = (ctypes.c_float * capacity)()
         size3 = ctypes.c_int(capacity)
@@ -487,15 +1024,17 @@ class SpectrometerAPI:
         )
 
     def set_user_data(self, device_id: int, offset: int, data: bytes | bytearray | memoryview) -> None:
+        offset = self._short_non_negative(offset, "offset")
         buffer = self._as_bytes_array(data)
-        ok = self.lib.spec_set_user_data(int(device_id), int(offset), buffer, len(buffer))
+        self._short_non_negative(len(buffer), "data length")
+        ok = self.lib.spec_set_user_data(int(device_id), offset, buffer, len(buffer))
         self._check(ok, "set_user_data", device_id)
 
     def get_user_data(self, device_id: int, offset: int, length: int) -> bytes:
-        if length < 0:
-            raise TLSC1ValidationError("length must be non-negative")
-        buffer = (ctypes.c_ubyte * int(length))()
-        ok = self.lib.spec_get_user_data(int(device_id), int(offset), buffer, int(length))
+        offset = self._short_non_negative(offset, "offset")
+        length = self._short_non_negative(length, "length")
+        buffer = (ctypes.c_ubyte * length)()
+        ok = self.lib.spec_get_user_data(int(device_id), offset, buffer, length)
         self._check(ok, "get_user_data", device_id)
         return bytes(buffer)
 

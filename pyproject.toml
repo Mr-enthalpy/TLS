@@ -34,6 +34,8 @@ markers = [
   "hardware: opt-in tests that open real spectrometer hardware",
   "hardware_readonly: opt-in read-only hardware behavior tests",
   "hardware_reversible: opt-in reversible hardware control tests",
+  "hardware_motion: opt-in tests that move mechanical axes",
   "hardware_manual: manual hardware tests for dangerous or persistent operations",
+  "hardware_destructive: destructive hardware tests requiring double opt-in",
   "serial: tests that must not run concurrently for the same hardware",
 ]

@@ -31,6 +31,7 @@ include/
 # Public documentation. Do not include raw hardware logs or internal notes
 # unless they have been reviewed for serials, paths, and vendor licensing.
 docs/api_coverage.md
+docs/api_safety.md
 docs/sdk_audit.md
 docs/public-release.md
 

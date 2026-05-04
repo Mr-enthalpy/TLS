@@ -16,6 +16,7 @@ This is not a public pip release yet.
 - High-level API: stable core workflow and diagnostics only.
 - Hardware behavior recorded in this branch: `47/126` SDK functions.
 - SDK API safety classification is tracked in `docs/api_safety.md` and mirrored in `docs/api_coverage.md`.
+- Structural low-level coverage does not mean all hardware behavior is safe. Use `tls_c1` as the default entry point; treat non-stable `SpectrometerAPI` methods as advanced or quarantined.
 - Public branch model: `public` is generated from internal `main` by `.public-include` and `scripts/sync-public.sh`; do not edit `public` manually.
 
 ## Windows And FTDI Setup

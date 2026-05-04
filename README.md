@@ -10,13 +10,13 @@ This is not a public pip release yet.
 
 - Platform: Windows. The vendor SDK ships Windows DLLs and depends on FTDI D2XX.
 - Python package name: `tls_c1`; distribution name in `pyproject.toml`: `tls-c1-spectrometer`.
-- Version in `pyproject.toml`: `0.0.0`; keep it pre-release until packaging and licensing are settled.
+- Version in `pyproject.toml`: `0.1.0rc0` for internal release-candidate validation only.
 - Native binding: `126/126` `spec_*` functions registered from the vendor ABI.
 - Low-level API: `126/126` functions exposed on `SpectrometerAPI`.
 - High-level API: stable core workflow and diagnostics only.
-- Hardware behavior recorded in this branch: `47/126` SDK functions.
+- Hardware behavior recorded in this branch: stable subset around `47/126` SDK functions.
 - SDK API safety classification is tracked in `docs/api_safety.md` and mirrored in `docs/api_coverage.md`.
-- Structural low-level coverage does not mean all hardware behavior is safe. Use `tls_c1` as the default entry point; treat non-stable `SpectrometerAPI` methods as advanced or quarantined.
+- Structural low-level coverage does not mean all hardware behavior is safe. Use `tls_c1` as the default entry point; treat non-stable `SpectrometerAPI` methods as advanced, experimental, or quarantined.
 - Public branch model: `public` is generated from internal `main` by `.public-include` and `scripts/sync-public.sh`; do not edit `public` manually.
 
 ## Windows And FTDI Setup
@@ -150,7 +150,7 @@ Smoke test. This opens the device and moves to the configured safe wavelength:
 py -3.12 -m pytest tests\test_hardware_smoke.py -s
 ```
 
-Read-only behavior tests:
+Stable read-only whitelist tests:
 
 ```powershell
 py -3.12 -m pytest tests\test_hardware_read_only.py -s
@@ -170,11 +170,12 @@ $env:TLS_C1_RUN_MOTION_TESTS = "1"
 py -3.12 -m pytest -m hardware_motion -s
 ```
 
-Manual/dangerous tests require separate opt-ins:
+Quarantined/manual tests require separate opt-ins and are isolated from normal hardware batches:
 
 ```powershell
 $env:TLS_C1_RUN_MANUAL_TESTS = "1"
-py -3.12 -m pytest -m hardware_manual -s
+$env:TLS_C1_ACK_SESSION_BREAK_RISK = "I_UNDERSTAND_THIS_MAY_REQUIRE_POWER_CYCLE"
+py -3.12 -m pytest tests\test_hardware_quarantined_manual.py -s
 ```
 
 Destructive tests require a double opt-in:
@@ -187,7 +188,7 @@ py -3.12 -m pytest -m hardware_destructive -s
 
 Do not add automatic tests for `restore`, `backup`, EEPROM/user data, calibration writes, correction-param writes, home/zero routines, range scans, trigger writes, or persistent setup flags.
 
-The 2026-05-04 extended read-only session added behavior for `spec_get_zero_offset`, `spec_get_zero_pos`, and `spec_get_adjustment`, then the device remained enumerable but could not be reopened until the USB/FTDI session is reset. The broader extended read-only suite is present but not counted as verified until it passes end-to-end on a reset device.
+Some low-level probe APIs are now classified as `session-breaking-observed`: they can leave the device enumerable but temporarily not reopenable until power cycle or session reset. Those probes are quarantined and excluded from stable release validation.
 
 ## Documentation
 

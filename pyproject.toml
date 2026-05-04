@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tls-c1-spectrometer"
-version = "0.0.0"
+version = "0.1.0rc0"
 description = "Python wrapper for the Zolix spectrometer SDK"
 readme = "README.md"
 requires-python = ">=3.8"
